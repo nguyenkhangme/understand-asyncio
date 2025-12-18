@@ -1,0 +1,942 @@
+@startuml
+title asyncio Task interleave & overlapping
+
+hide footbox
+skinparam sequenceMessageAlign center 
+skinparam ParticipantPadding 20
+
+participant "Event Loop" as L #64bef687
+participant "Task-1.__step()\naccept_requests()" as T1 #64bef687
+
+box "req1" #8abfd336
+participant "Task-2.__step()\nhandle_request(1)" as T2 #64bef687
+participant "Task-3.__step()\nfake_db(1)" as T3 #64bef687
+participant "Task-4.__step()\nfake_http(1)" as T4 #64bef687
+end box
+
+box "req2" #a1d6ea26
+participant "Task-5.__step()\nhandle_request(2)" as T5 #64bef687
+participant "Task-6.__step()\nfake_db(2)" as T6 #64bef687
+participant "Task-7.__step()\nfake_http(2)" as T7 #64bef687
+end box
+
+box "req3" #b0e5f817
+participant "Task-8.__step()\nhandle_request(3)" as T8 #64bef687
+participant "Task-9.__step()\nfake_db(3)" as T9 #64bef687
+participant "Task-10.__step()\nfake_http(3)" as T10 #64bef687
+end box
+
+activate L
+== Task-2 scheduled, then Task-1 yields on sleep(0.05) == 
+
+L -> T1 : call T1.__step()
+activate T1
+
+T1 -> T1 : await\nspawn(handle_request(1))\n -> cretate_task(handle_request(1)) (T2)
+T1 -> L : schedule T2.__step()
+
+note right of L #3bc2ef33
+When created,
+the task auto-schedules to call soon
+its __step()
+end note
+note right of L #3bc2ef33
+loop's ready = deque([T2.__step()])
+(we will use Tx only after this for short) 
+scheduled = [loop.stop(loop)] (this is a heap)
+end note
+
+T1 -> T1 : await asyncio.sleep(0.05)\n(which is a future)\n add_done_callback() to that future
+T1 -> L : schedule to call a callback after 0.05s\nto mark that future is done \n (implemented inside asyncio.sleep())
+
+note right of L #3bc2ef33
+ready = deque([T2])
+scheduled = [
+    sleep_0_05_callback_T1,
+    loop.stop(loop)
+]
+end note
+
+T1 --> L : T1.__step() end (hit await that suspends)\n back to event loop
+
+deactivate T1
+
+
+== Event loop picks Task-2 (ready) ==
+
+L -> T2 : call T2.__step()
+activate T2
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_0_05_callback_T1,
+    loop.stop(loop)
+]
+end note
+
+T2 -> T2 : await spawn(fake_db(1))\n-> cretate_task(fake_db(1)) (T3)
+T2 -> L : schedule T3.__step()
+
+note right of L #3bc2ef33
+ready = deque([T3])
+scheduled = [
+    sleep_0_05_callback_T1,
+    loop.stop(loop)
+]
+end note
+
+T2 -> T2 : await spawn(fake_http(1))\n-> cretate_task(fake_http(1)) (T4)
+T2 -> L : schedule T4.__step()
+
+note right of L #3bc2ef33
+ready = deque([T3, T4])
+scheduled = [
+    sleep_0_05_callback_T1,
+    loop.stop(loop)
+]
+end note
+
+T2 -> T2 : await gather(T3, T4)\n (a future aggregating results of T3, T4)\n T2 will be wake up when this future done
+L <-- T2 : T2.__step() end (hit await that suspends)\n back to event loop
+deactivate T2
+
+
+== Event loop runs Task-3 then Task-4 (ready); both suspend on sleep(3) ==
+
+L -> T3 : call T3.__step()
+
+note right of L #3bc2ef33
+ready = deque([T4])
+scheduled = [
+    sleep_0_05_callback_T1,
+    loop.stop(loop)
+]
+end note
+
+activate T3
+T3 -> T3 : await asyncio.sleep(3)
+T3 -> L : schedule to call a callback after 3s\nto mark the sleep future is done
+
+note right of L #3bc2ef33
+ready = deque([T4])
+scheduled = [
+    sleep_0_05_callback_T1, 
+    sleep_3_callback_T3,
+    loop.stop(loop)
+]
+end note
+
+L <-- T3 : T3.__step() end \n back to event loop
+deactivate T3
+
+L -> T4 : call T4.__step()
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_0_05_callback_T1, 
+    sleep_3_callback_T3,
+    loop.stop(loop)
+]
+end note
+
+activate T4
+T4 -> T4 : await asyncio.sleep(3)
+T4 -> L : schedule to call a callback after 3s\nto mark the sleep future is done
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_0_05_callback_T1, 
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+L <-- T4 : T4.__step() end \n back to event loop
+deactivate T4
+
+
+== +0.052s timer fires: Task-1 becomes READY again then schedule for rq2 ==
+
+L -> L : no ready callback, block until sleep_0_05_callback_T1 ready\n unless some event ready during that time\nusing selector.select(timeout)
+
+note right of L #3bc2ef33
+We see it is not exactly
+0.05s but 0.052s
+due to overhead
+end note
+
+L -> L : now sleep_0_05_callback_T1 is ready
+
+note right of L #3bc2ef33
+ready = deque([sleep_0_05_callback_T1])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+L -> L : sleep_0_05_callback_T1 mark the sleep future done \n that sleep future then schedule its done callback \n that T1.__step() add to it
+
+note right of L #3bc2ef33
+ready = deque([T1_wake_up])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+L -> T1 : call T1.__step()
+activate T1
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+T1 -> T1 : await\nspawn(handle_request(2))\n -> cretate_task(handle_request(2)) (T5)
+T1 -> L : schedule T5.__step()
+
+note right of L #3bc2ef33
+ready = deque([T5])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+T1 -> T1 : await asyncio.sleep(0.05)
+T1 -> L : schedule to call a callback after 0.05s\nto mark the sleep future is done
+
+note right of L #3bc2ef33
+ready = deque([T5])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+T1 --> L : T1.__step() end (hit await that suspends)\n back to event loop
+
+deactivate T1
+
+
+L -> T5 : call T5.__step()
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+activate T5
+
+T5 -> T5 : await spawn(fake_db(2))\n-> cretate_task(fake_db(2)) (T6)
+T5 -> L : schedule T6.__step()
+
+note right of L #3bc2ef33
+ready = deque([T6])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+T5 -> T5 : await spawn(fake_http(2))\n-> cretate_task(fake_http(2)) (T7)
+T5 -> L : schedule T7.__step()
+
+note right of L #3bc2ef33
+ready = deque([T6, T7])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+T5 -> T5 : await gather(T6, T7)\n (a future aggregating results of T6, T7)\n T5 will be wake up when this future done
+L <-- T5 : T5.__step() end (hit await that suspends)\n back to event loop
+deactivate T5
+
+L -> T6 : call T6.__step()
+
+note right of L #3bc2ef33
+ready = deque([T7])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    loop.stop(loop)
+]
+end note
+
+activate T6
+T6 -> T6 : await asyncio.sleep(3)
+T6 -> L : schedule to call a callback after 3s\nto mark the sleep future is done
+
+
+note right of L #3bc2ef33
+ready = deque([T7])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    loop.stop(loop)
+]
+end note
+
+L <-- T6 : T6.__step() end \n back to event loop
+deactivate T6
+
+L -> T7 : call T7.__step()
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    loop.stop(loop)
+]
+end note
+
+activate T7
+T7 -> T7 : await asyncio.sleep(3)
+T7 -> L : schedule to call a callback after 3s\nto mark the sleep future is done
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+L <-- T7 : T7.__step() end \n back to event loop
+deactivate T7
+
+== +0.051s timer fires: Task-1 becomes READY again then schedule for rq3 ==
+
+L -> L : no ready callback, block until sleep_0_05_callback_T1 ready\n unless some event ready during that time\nusing selector.select(timeout)
+
+note right of L #3bc2ef33
+ready = deque([sleep_0_05_callback_T1])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+note right of L #3bc2ef33
+ready = deque([T1_wake_up])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+L -> T1 : call T1.__step()
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+activate T1
+
+T1 -> T1 : await\nspawn(handle_request(3))\n -> cretate_task(handle_request(3)) (T8)
+T1 -> L : schedule T8.__step()
+
+note right of L #3bc2ef33
+ready = deque([T8])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+T1 -> T1 : await asyncio.sleep(0.05)
+T1 -> L : schedule to call a callback after 0.05s\nto mark the sleep future is done
+
+note right of L #3bc2ef33
+ready = deque([T8])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+T1 --> L : T1.__step() end (hit await that suspends)\n back to event loop
+
+deactivate T1
+
+L -> T8 : call T8.__step()
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+activate T8
+
+T8 -> T8 : await spawn(fake_db(3))\n-> cretate_task(fake_db(3)) (T9)
+T8 -> L : schedule T9.__step()
+
+note right of L #3bc2ef33
+ready = deque([T9])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+T8 -> T8 : await spawn(fake_http(3))\n-> cretate_task(fake_http(3)) (T10)
+T8 -> L : schedule T10.__step()
+
+note right of L #3bc2ef33
+ready = deque([T9, T10])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+T8 -> T8 : await gather(T9, T10)\n (a future aggregating results of T9, T10)\n T8 will be wake up when this future done
+L <-- T8 : T8.__step() end (hit await that suspends)\n back to event loop
+deactivate T8
+
+L -> T9 : call T9.__step()
+
+note right of L #3bc2ef33
+ready = deque([T10])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    loop.stop(loop)
+]
+end note
+
+activate T9
+T9 -> T9 : await asyncio.sleep(3)
+T9 -> L : schedule to call a callback after 3s\nto mark the sleep future is done
+
+note right of L #3bc2ef33
+ready = deque([T10])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    loop.stop(loop)
+]
+end note
+
+L <-- T9 : T9.__step() end \n back to event loop
+deactivate T9
+
+L -> T10 : call T10.__step()
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    loop.stop(loop)
+]
+end note
+
+activate T10
+T10 -> T10 : await asyncio.sleep(3)
+T10 -> L : schedule to call a callback after 3s\nto mark the sleep future is done
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_0_05_callback_T1,
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+L <-- T10 : T10.__step() end \n back to event loop
+deactivate T10
+
+
+
+== +0.051s timers fire: Task-1 becomes READY again then done ==
+
+L -> L : no ready callback, block until sleep_0_05_callback_T1 ready\n unless some event ready during that time\nusing selector.select(timeout)
+
+note right of L #3bc2ef33
+ready = deque([sleep_0_05_callback_T1])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+note right of L #3bc2ef33
+ready = deque([T1_wake_up])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+L -> T1 : call T1.__step()
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_3_callback_T3,
+    sleep_3_callback_T4,
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+activate T1
+
+T1 -> T1 : Finish running,\nraise StopIteration,\nmark this task as done
+
+T1 --> L : T1.__step() end\n back to event loop
+
+deactivate T1
+
+
+== +2.848s timers fire: T3 done, T4 done, then T2 done ==
+
+L -> L : no ready callback, block until sleep_3_callback_T3 ready\n unless some event ready during that time\nusing selector.select(timeout)
+
+note right of L #3bc2ef33
+ready = deque([sleep_3_callback_T3, sleep_3_callback_T4])
+scheduled = [
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+note right of L #3bc2ef33
+ready = deque([T3_wake_up, T4_wake_up])
+scheduled = [
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+
+L -> T3 : call T3.__step()
+
+note right of L #3bc2ef33
+ready = deque([T4_wake_up])
+scheduled = [
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+activate T3
+T3 -> T3 : Finish running,\nraise StopIteration,\n set result for it as "db"\n mark it as done
+T3 -> L : Schedule a done callback that asyncio.gather() add to it
+note right of L #3bc2ef33
+ready = deque([T4_wake_up, T3_done_call_back])
+scheduled = [
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+T3 --> L : T3.__step() end\n back to event loop
+
+deactivate T3
+
+L -> T4 : call T4.__step()
+
+note right of L #3bc2ef33
+ready = deque([T3_done_call_back])
+scheduled = [
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+activate T4
+T4 -> T4 : Finish running,\nraise StopIteration,\n set result for it as "http"\n mark it as done
+T4 -> L : Schedule a done callback that asyncio.gather() add to it
+note right of L #3bc2ef33
+ready = deque([T3_done_call_back, T4_done_call_back])
+scheduled = [
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+T4 --> L : T4.__step() end\n back to event loop
+
+deactivate T4
+
+L -> L : T3_done_call_back \n notify asyncio.gather() future that T3 is done
+L -> L : T4_done_call_back \n notify asyncio.gather() future that T4 is done \n then the gather future is done \n as mentioned before this demonstraion
+L -> L : the gather future done will schedule its done callback \n that T2.__step() add to it
+
+note right of L #3bc2ef33
+ready = deque([T2_wake_up])
+scheduled = [
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+L -> T2 : call T2.__step()
+activate T2
+
+T2 -> T2 : the gather future return result back to a, b \n as we introduced above in section 2
+T2 -> T2 : Finish running,\nraise StopIteration,\n set result for it as {"id": 1, "a": "db", "b": "http"} \n mark it as done
+
+T2 -> L : Schedule the on_done callback that we add to it
+
+note right of L #3bc2ef33
+ready = deque([T2_on_done_callback])
+scheduled = [
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+T2 --> L : T2.__step() end\n back to event loop
+
+deactivate T2
+
+L -> L : T2_on_done_callback run,\n log("SEND RESPONSE:", task.result(), prefix="[server]")\n -> [server] 291564.282 SEND RESPONSE: {'id': 1, 'a': 'db', 'b': 'http'}
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_3_callback_T6,
+    sleep_3_callback_T7,
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+== +0.051s timers fire: T6 done, T7 done, then T5 done ==
+
+L -> L : no ready callback, block until sleep_3_callback_T6 ready\n unless some event ready during that time\nusing selector.select(timeout)
+
+note right of L #3bc2ef33
+ready = deque([sleep_3_callback_T6, sleep_3_callback_T7])
+scheduled = [
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+note right of L #3bc2ef33
+ready = deque([T6_wake_up, T7_wake_up])
+scheduled = [
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+
+L -> T6 : call T6.__step()
+
+note right of L #3bc2ef33
+ready = deque([T7_wake_up])
+scheduled = [
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+activate T6
+T6 -> T6 : Finish running,\nraise StopIteration,\n set result for it as "db"\n mark it as done
+T6 -> L : Schedule a done callback that asyncio.gather() add to it
+note right of L #3bc2ef33
+ready = deque([T7_wake_up, T6_done_call_back])
+scheduled = [
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+T6 --> L : T6.__step() end\n back to event loop
+
+deactivate T6
+
+L -> T7 : call T7.__step()
+
+note right of L #3bc2ef33
+ready = deque([T6_done_call_back])
+scheduled = [
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+activate T7
+T7 -> T7 : Finish running,\nraise StopIteration,\n set result for it as "http"\n mark it as done
+T7 -> L : Schedule a done callback that asyncio.gather() add to it
+note right of L #3bc2ef33
+ready = deque([T6_done_call_back, T7_done_call_back])
+scheduled = [
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+T7 --> L : T7.__step() end\n back to event loop
+
+deactivate T7
+
+L -> L : T6_done_call_back \n notify asyncio.gather() future that T6 is done
+L -> L : T7_done_call_back \n notify asyncio.gather() future that T7 is done \n then the gather future is done \n as mentioned before this demonstraion
+L -> L : the gather future done will schedule its done callback \n that T5.__step() add to it
+
+note right of L #3bc2ef33
+ready = deque([T5_wake_up])
+scheduled = [
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+L -> T5 : call T5.__step()
+activate T5
+
+T5 -> T5 : the gather future return result back to a, b \n as we introduced above in section 2
+T5 -> T5 : Finish running,\nraise StopIteration,\n set result for it as {"id": 2, "a": "db", "b": "http"} \n mark it as done
+
+T5 -> L : Schedule the on_done callback that we add to it
+
+note right of L #3bc2ef33
+ready = deque([T5_on_done_callback])
+scheduled = [
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+T5 --> L : T5.__step() end\n back to event loop
+
+deactivate T5
+
+L -> L : T5_on_done_callback run,\n log("SEND RESPONSE:", task.result(), prefix="[server]")\n ->  [server] 291564.333 SEND RESPONSE: {'id': 2, 'a': 'db', 'b': 'http'}
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [
+    sleep_3_callback_T9,
+    sleep_3_callback_T10,
+    loop.stop(loop)
+]
+end note
+
+== +0.051s timers fire: T9 done, T10 done, then T8 done ==
+
+L -> L : no ready callback, block until sleep_3_callback_T9 ready\n unless some event ready during that time\nusing selector.select(timeout)
+
+note right of L #3bc2ef33
+ready = deque([sleep_3_callback_T9, sleep_3_callback_T10])
+scheduled = [loop.stop(loop)]
+end note
+
+note right of L #3bc2ef33
+ready = deque([T9_wake_up, T10_wake_up])
+scheduled = [loop.stop(loop)]
+end note
+
+
+L -> T9 : call T9.__step()
+
+note right of L #3bc2ef33
+ready = deque([10_wake_up])
+scheduled = [loop.stop(loop)]
+end note
+
+activate T9
+T9 -> T9 : Finish running,\nraise StopIteration,\n set result for it as "db"\n mark it as done
+T9 -> L : Schedule a done callback that asyncio.gather() add to it
+note right of L #3bc2ef33
+ready = deque([T10_wake_up, T9_done_call_back])
+scheduled = [loop.stop(loop)]
+end note
+T9 --> L : T9.__step() end\n back to event loop
+
+deactivate T9
+
+L -> T10 : call T10.__step()
+
+note right of L #3bc2ef33
+ready = deque([T9_done_call_back])
+scheduled = [loop.stop(loop)]
+end note
+
+activate T10
+T10 -> T10 : Finish running,\nraise StopIteration,\n set result for it as "http"\n mark it as done
+T10 -> L : Schedule a done callback that asyncio.gather() add to it
+note right of L #3bc2ef33
+ready = deque([T9_done_call_back, T10_done_call_back])
+scheduled = [loop.stop(loop)]
+end note
+
+T10 --> L : T10.__step() end\n back to event loop
+
+deactivate T10
+
+L -> L : T9_done_call_back \n notify asyncio.gather() future that T9 is done
+L -> L : T10_done_call_back \n notify asyncio.gather() future that T10 is done \n then the gather future is done \n as mentioned before this demonstraion
+L -> L : the gather future done will schedule its done callback \n that T8.__step() add to it
+
+note right of L #3bc2ef33
+ready = deque([T8_wake_up])
+scheduled = [loop.stop(loop)]
+end note
+
+L -> T8 : call T8.__step()
+activate T8
+
+T8 -> T8 : the gather future return result back to a, b \n as we introduced above in section 2
+T8 -> T8 : Finish running,\nraise StopIteration,\n set result for it as {"id": 3, "a": "db", "b": "http"} \n mark it as done
+
+T8 -> L : Schedule the on_done callback that we add to it
+
+note right of L #3bc2ef33
+ready = deque([T8_on_done_callback])
+scheduled = [loop.stop(loop)]
+end note
+
+T8 --> L : T8.__step() end\n back to event loop
+
+deactivate T8
+
+L -> L : T8_on_done_callback run,\n log("SEND RESPONSE:", task.result(), prefix="[server]")\n ->  [server] 291564.384 SEND RESPONSE: {'id': 3, 'a': 'db', 'b': 'http'}
+
+note right of L #3bc2ef33
+ready = deque([])
+scheduled = [loop.stop(loop)]
+end note
+
+L -> L : loop.stop(loop)
+
+deactivate L
+
+@enduml

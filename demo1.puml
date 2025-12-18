@@ -1,0 +1,77 @@
+@startuml
+title asyncio Task interleave & overlapping
+
+hide footbox
+skinparam sequenceMessageAlign center 
+skinparam ParticipantPadding 20
+
+participant "Event Loop" as L #64bef687
+participant "Task-1.__step()\nasync_main()" as T1 #64bef687
+participant "Task-2.__step()\ntick()" as T2 #64bef687
+
+activate L
+
+L -> T1 : call T1.__step()
+activate T1
+
+T1 -> T1 : asyncio.create_task(tick()) (T2)
+T1 -> L : schedule T2.__step()
+
+note right of L #3bc2ef33
+When created,
+the task auto-schedules to call soon
+its __step()
+end note
+note right of L #3bc2ef33
+loop's ready = deque([T2.__step()])
+(we will use Tx only after this for short) 
+scheduled = [] (this is a heap)
+end note
+
+T1 -> T1 : since it never hit something that suspend,\nT1 just continue running
+
+T1 -> T1 : Finish running,\nraise StopIteration,\nmark this task as done
+
+T1 -> L : schedule a callback to stop the loop
+
+note right of L #3bc2ef33
+ready = deque([T2, stop_loop_callback])
+scheduled = []
+end note
+
+T1 --> L : T1.__step() end\n back to event loop
+
+deactivate T1
+
+L -> T2 : call T2.__step()
+
+note right of L #3bc2ef33
+ready = deque([stop_loop_callback])
+scheduled = []
+end note
+
+activate T2
+
+T2 -> T2 : await asyncio.sleep(2)\n(which is a future)\n add_done_callback() to that future
+T2 -> L : schedule to call a callback after 2s\nto mark that future is done \n (implemented inside asyncio.sleep())
+
+note right of L #3bc2ef33
+ready = deque([stop_loop_callback])
+scheduled = [sleep_2_callback_T2]
+end note
+
+T2 --> L : T2.__step() end (hit await that suspends)\n back to event loop
+
+deactivate T2
+
+L -> L : run stop_loop_callback that stops the loop
+
+note right of L #3bc2ef33
+sleep_2_callback_T2 has never been called
+because the loop is already stopped
+and the program exited
+end note
+
+deactivate L
+
+@enduml
