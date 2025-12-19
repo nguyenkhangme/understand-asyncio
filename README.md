@@ -221,12 +221,11 @@ After you already implemented your program with coroutines, we can start running
     - result is `None`: happens when running into bare yield. `await asyncio.sleep(0)` also hits this path because it bare yield internally inside a generator-based coroutine.
     - a `StopIteration` is raised
       - `StopIteration` is raised when the coroutine (of the task) finishes execution. If the coroutine `return some_value`, then `some_value` is carried inside `StopIteration.value`.
-    - an Exception:
+    - an Exception is raised:
       - an KeyboardInterrupt / SystemExit
       - a CancelledError
       - a Base Exception: Since this is the exception while running the coroutine and the coroutine does not handle it, we just `set_exception` for the task.
     - result is anything else: `__step()` will schedule itself again with an exception, then in its next call, it will call `coro.throw(exc)`, so that the coroutine can handle this exception by itself and continue running.
-    - I also skip some exception handling here
 - After suspending the `await` chain call, `__step` handle correspondingly, finish running, and allow the event loop to continue running.
 - Specifically, from the user's point of view, the flow will be different based on the object you await:
   - await a coroutine: This will continue running and not return until it reaches something that actually suspends, then it can allow the event loop to continue calling another callback. That something actually suspended is what we discussed above on the `__step()` method.
