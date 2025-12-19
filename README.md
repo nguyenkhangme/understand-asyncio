@@ -9,7 +9,7 @@ tags:
   - english
 ---
 
-Read this on [my blog](https://nguyenkhang.me/posts/2025/12/understand-concurrency-in-python-with-asyncio-dig-into-the-asyncio-source-code/)
+Read this on [my blog](https://nguyenkhang.me/posts/2025/12/understand-concurrency-in-python-with-asyncio-dig-into-the-asyncio-source-code/) or [my substack](https://nguyenkhangme.substack.com/p/understand-concurrency-in-python)
 
 - [1. Some concept](#1-some-concept)
   - [1.1. I/O-bound and CPU-bound](#11-io-bound-and-cpu-bound)
