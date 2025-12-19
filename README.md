@@ -9,6 +9,8 @@ tags:
   - english
 ---
 
+Read this on [my blog](https://nguyenkhang.me/posts/2025/12/understand-concurrency-in-python-with-asyncio-dig-into-the-asyncio-source-code/)
+
 - [1. Some concept](#1-some-concept)
   - [1.1. I/O-bound and CPU-bound](#11-io-bound-and-cpu-bound)
   - [1.2. Sequential execution vs Concurrency vs Parallelism](#12-sequential-execution-vs-concurrency-vs-parallelism)
