@@ -103,107 +103,144 @@ Output:
 === WITHOUT BLOCKING ===
 
 === sequential ===
-[04:25:32] start sequential vod1
-[04:25:32] scrooling reel: 0
+[18:34:13] start sequential vod1
+[18:34:13] scrooling reel: 0
 
 === sequential ===
-[04:25:32] start sequential vod1
+[18:34:13] start sequential vod1
 
 === concurrent ===
-[04:25:32] start concurrent vod1
-[04:25:32] start concurrent vod2
-[04:25:33] scrooling reel: 1
-[04:25:34] scrooling reel: 2
-[04:25:35] end   sequential vod1
-[04:25:35] start sequential vod2
-[04:25:35] end   sequential vod1
-[04:25:35] start sequential vod2
-[04:25:35] end   concurrent vod1
-[04:25:35] end   concurrent vod2
+[18:34:13] start concurrent vod1
+[18:34:13] start concurrent vod2
+[18:34:14] scrooling reel: 1
+[18:34:15] scrooling reel: 2
+[18:34:16] end   sequential vod1
+[18:34:16] start sequential vod2
+[18:34:16] end   sequential vod1
+[18:34:16] start sequential vod2
+[18:34:16] end   concurrent vod1
+[18:34:16] end   concurrent vod2
 concurrent took 3.00 seconds
-[04:25:35] scrooling reel: 3
-[04:25:36] scrooling reel: 4
-[04:25:37] scrooling reel: 5
-[04:25:38] end   sequential vod2
+[18:34:16] scrooling reel: 3
+[18:34:17] scrooling reel: 4
+[18:34:18] scrooling reel: 5
+[18:34:19] end   sequential vod2
 sequential took 6.00 seconds
-[04:25:38] end   sequential vod2
+[18:34:19] end   sequential vod2
 sequential took 6.00 seconds
-[04:25:38] scrooling reel: 6
-[04:25:39] scrooling reel: 7
-[04:25:41] scrooling reel: 8
-[04:25:42] scrooling reel: 9
+[18:34:19] scrooling reel: 6
+[18:34:20] scrooling reel: 7
+[18:34:21] scrooling reel: 8
+[18:34:22] scrooling reel: 9
 
 === WITH BLOCKING ===
 
 === sequential ===
-[04:25:43] start sequential vod1
-[04:25:43] scrooling reel: 0
-[04:25:43] === before blocking_download ===
-[04:25:43] vod1: start BLOCKING download
-[04:25:48] vod1: end BLOCKING download
-[04:25:48] === after blocking_download ===
+[18:34:23] start sequential vod1
+[18:34:23] scrooling reel: 0
+[18:34:23] === before blocking_download ===
+[18:34:23] vod1: start BLOCKING download
+[18:34:28] vod1: end BLOCKING download
+[18:34:28] === after blocking_download ===
 
 === sequential ===
-[04:25:48] start sequential vod1
+[18:34:28] start sequential vod1
 
 === concurrent ===
-[04:25:48] start concurrent vod1
-[04:25:48] start concurrent vod2
-[04:25:48] scrooling reel: 1
-[04:25:48] end   sequential vod1
-[04:25:48] start sequential vod2
-[04:25:49] scrooling reel: 2
-[04:25:50] scrooling reel: 3
-[04:25:51] end   sequential vod1
-[04:25:51] start sequential vod2
-[04:25:51] end   concurrent vod1
-[04:25:51] end   concurrent vod2
-[04:25:51] end   sequential vod2
+[18:34:28] start concurrent vod1
+[18:34:28] start concurrent vod2
+[18:34:28] scrooling reel: 1
+[18:34:28] end   sequential vod1
+[18:34:28] start sequential vod2
+[18:34:29] scrooling reel: 2
+[18:34:30] scrooling reel: 3
+[18:34:31] end   sequential vod1
+[18:34:31] start sequential vod2
+[18:34:31] end   concurrent vod1
+[18:34:31] end   concurrent vod2
+concurrent took 3.00 seconds
+[18:34:31] end   sequential vod2
 sequential took 8.00 seconds
-concurrent took 3.00 seconds
-[04:25:51] scrooling reel: 4
-[04:25:52] scrooling reel: 5
-[04:25:53] scrooling reel: 6
-[04:25:54] end   sequential vod2
+[18:34:31] scrooling reel: 4
+[18:34:32] scrooling reel: 5
+[18:34:33] scrooling reel: 6
+[18:34:34] end   sequential vod2
 sequential took 6.00 seconds
-[04:25:54] scrooling reel: 7
-[04:25:55] scrooling reel: 8
-[04:25:56] scrooling reel: 9
+[18:34:34] scrooling reel: 7
+[18:34:35] scrooling reel: 8
+[18:34:36] scrooling reel: 9
 
 === WITH BLOCKING ===
 
 === sequential ===
-[04:25:57] start sequential vod1
-[04:25:57] scrooling reel: 0
+[18:34:37] start sequential vod1
+[18:34:37] scrooling reel: 0
 
 === sequential ===
-[04:25:57] start sequential vod1
+[18:34:37] start sequential vod1
 
 === concurrent ===
-[04:25:57] === before blocking_download ===
-[04:25:57] vod1: start BLOCKING download
-[04:26:02] vod1: end BLOCKING download
-[04:26:02] === after blocking_download ===
-[04:26:02] start concurrent vod1
-[04:26:02] start concurrent vod2
-[04:26:02] scrooling reel: 1
-[04:26:02] end   sequential vod1
-[04:26:02] start sequential vod2
-[04:26:02] end   sequential vod1
-[04:26:02] start sequential vod2
-[04:26:03] scrooling reel: 2
-[04:26:04] scrooling reel: 3
-[04:26:05] end   concurrent vod1
-[04:26:05] end   concurrent vod2
-[04:26:05] end   sequential vod2
+[18:34:37] === before blocking_download ===
+[18:34:37] vod1: start BLOCKING download
+[18:34:42] vod1: end BLOCKING download
+[18:34:42] === after blocking_download ===
+[18:34:42] start concurrent vod1
+[18:34:42] start concurrent vod2
+[18:34:42] scrooling reel: 1
+[18:34:42] end   sequential vod1
+[18:34:42] start sequential vod2
+[18:34:42] end   sequential vod1
+[18:34:42] start sequential vod2
+[18:34:43] scrooling reel: 2
+[18:34:44] scrooling reel: 3
+[18:34:45] end   concurrent vod1
+[18:34:45] end   concurrent vod2
+[18:34:45] end   sequential vod2
 sequential took 8.01 seconds
-[04:26:05] end   sequential vod2
+[18:34:45] end   sequential vod2
 sequential took 8.01 seconds
 concurrent took 8.01 seconds
-[04:26:05] scrooling reel: 4
-[04:26:06] scrooling reel: 5
-[04:26:07] scrooling reel: 6
-[04:26:08] scrooling reel: 7
-[04:26:09] scrooling reel: 8
-[04:26:10] scrooling reel: 9
+[18:34:45] scrooling reel: 4
+[18:34:46] scrooling reel: 5
+[18:34:47] scrooling reel: 6
+[18:34:48] scrooling reel: 7
+[18:34:49] scrooling reel: 8
+[18:34:50] scrooling reel: 9
+
+=== HANDLE BLOCKING ===
+
+=== sequential ===
+[18:34:51] start sequential vod1
+[18:34:51] scrooling reel: 0
+
+=== sequential ===
+[18:34:51] start sequential vod1
+
+=== concurrent ===
+[18:34:51] === before blocking_download ===
+[18:34:51] vod1: start BLOCKING download
+[18:34:51] start concurrent vod1
+[18:34:51] start concurrent vod2
+[18:34:52] scrooling reel: 1
+[18:34:53] scrooling reel: 2
+[18:34:54] end   sequential vod1
+[18:34:54] start sequential vod2
+[18:34:54] end   sequential vod1
+[18:34:54] start sequential vod2
+[18:34:54] scrooling reel: 3
+[18:34:54] end   concurrent vod1
+[18:34:54] end   concurrent vod2
+concurrent took 3.01 seconds
+[18:34:55] scrooling reel: 4
+[18:34:56] scrooling reel: 5
+[18:34:56] vod1: end BLOCKING download
+[18:34:56] === after blocking_download ===
+[18:34:57] end   sequential vod2
+sequential took 6.00 seconds
+[18:34:57] end   sequential vod2
+sequential took 6.00 seconds
+[18:34:57] scrooling reel: 6
+[18:34:58] scrooling reel: 7
+[18:34:59] scrooling reel: 8
+[18:35:00] scrooling reel: 9
 """
