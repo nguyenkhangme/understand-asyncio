@@ -31,7 +31,7 @@ Read this on [my blog](https://nguyenkhang.me/posts/2025/12/understand-concurren
     - [2.5.2. Demonstrate 2 visualization](#252-demonstrate-2-visualization)
     - [2.5.3. Demonstrate 2 explanation](#253-demonstrate-2-explanation)
 - [3. What's next](#3-whats-next)
-- [5. Resources](#5-resources)
+- [4. Resources](#4-resources)
 
 *Writing this post dives me into the flow, because it shows how fascinating programming can be. There is no magic, only thoughtfully crafted code.*
 
@@ -179,7 +179,7 @@ Finish running the coroutine, return value:  ok
 - Await can await only on an awaitable object.
   - Since `yield` is not allowed in a coroutine, how does the `await` chain calls end, except raising an exception (that is not `StopIteration`), or finishes running and raises `StopIteration`?
   - The answer lay in other awaitable object types:
-    - We can `yield` inside `__await__` method of a custom awaitable object, or yield inside a generator-based coroutine `@types.coroutine` function, but we can only yield None or else while running (with task) it will raise an exception, the reason is how task is implemented, discussed below in the section 2.3.
+    - We can `yield` inside `__await__` method of a custom awaitable object, or yield inside a generator-based coroutine `@types.coroutine` function, but we can only `yield None`, or else while running (with a task) it will raise an exception, the reason is how the task is implemented, discussed below in section 2.3.
     - Inside Future implementation, we see a `yield self` there. How it works will be discussed more below as well:
 
 ```python
@@ -197,19 +197,19 @@ Finish running the coroutine, return value:  ok
 After you already implemented your program with coroutines, we can start running it by calling the following methods, normally only once for the top-level coroutine:
 
 - `asyncio.run()`
-  - taking care of managing the asyncio event loop
-  - expect to receive a coroutine
+  - Taking care of managing the asyncio event loop.
+  - Expect to receive a coroutine.
   - Wrap coroutine in a task: using `loop.create_task(coro)`
 - `loop.run_until_complete()`
-  - Awaitable object is required
-  - The object will be wrapped using tasks.ensure_future:
-    - Custom awaitable objects will be wrapped into a coroutine
-    - Coroutines will be wrapped in a task (using `loop.create_task(coro)`)
-    - Futures/Tasks will remain themself
+  - Awaitable object is required.
+  - The object will be wrapped using `tasks.ensure_future`:
+    - Custom awaitable objects will be wrapped into a coroutine.
+    - Coroutines will be wrapped in a task (using `loop.create_task(coro)`).
+    - Futures/Tasks will remain themself.
 - `loop.run_forever()`
-  - to run a coroutine with `loop.run_forever()` you need to schedule it by `loop.create_task(coro)`
+  - to run a coroutine with `loop.run_forever()` you need to schedule it by `loop.create_task(coro)`.
 
--> So, whatever way we choose to run, a top-level coroutine is always wrapped into a task when run in the event loop
+-> So, whatever way we choose to run, a top-level coroutine is always wrapped into a task when run in the event loop.
 
 ### 2.3. Connect the dots
 
@@ -224,12 +224,12 @@ After you already implemented your program with coroutines, we can start running
     - an Exception is raised:
       - an KeyboardInterrupt / SystemExit
       - a CancelledError
-      - a Base Exception: Since this is the exception while running the coroutine and the coroutine does not handle it, we just `set_exception` for the task.
+      - a Base Exception: Since this is the exception while running the coroutine, and the coroutine does not handle it, we just `set_exception` for the task.
     - result is anything else: `__step()` will schedule itself again with an exception, then in its next call, it will call `coro.throw(exc)`, so that the coroutine can handle this exception by itself and continue running.
 - After suspending the `await` chain call, `__step` handle correspondingly, finish running, and allow the event loop to continue running.
 - Specifically, from the user's point of view, the flow will be different based on the object you await:
   - await a coroutine: This will continue running and not return until it reaches something that actually suspends, then it can allow the event loop to continue calling another callback. That something actually suspended is what we discussed above on the `__step()` method.
-    - Notice that`return some_value` in a coroutine does not mean it will raise a `StopIteration` back to the __step(). If a coroutine is awaited by another coroutine, the awaiter “catches” the completion instead. If it’s wrapped in a Task, then the Task catches the completion of the coroutine it owns.
+    - Notice that`return some_value` in a coroutine does not mean it will raise a `StopIteration` back to the `__step()`. If a coroutine is awaited by another coroutine, the awaiter “catches” the completion instead. If it’s wrapped in a Task, then the Task catches the completion of the coroutine it owns.
   - await a task or future:  if the task/future hasn't done, `__step()` registers `__wakeup()` as a done callback to the future:
 
 ```python
@@ -362,14 +362,14 @@ before await asyncio.sleep
 
 - What we can observe:
   - Task-1 is just run sequentially until done.
-  - Task-1 (async_main) is done before Task-2 start to run even Task-2 is created inside `async_main`.
+  - Task-1 (async_main) is done before Task-2 starts to run, even though Task-2 is created inside `async_main`.
   - Even after `async_main` is finished running, Task-2 is still able to run one step before the program ends.
   - Task-2 does not finish before the program ends.
 - Reason:
   - Task-1 never await on something that suspends until it finishes and returns `StopIteration`.
   - Task-2 is created and scheduled to run as soon as possible when the event loop regains control, i.e., in the next iteration of the loop (we will see it in the demo 2 below). Since Task-1 keeps running without yielding back to the event loop, Task-2 must wait until the event loop can take over again, which is when Task-1 is done.
-  - When Task-1 is done, it will schedule to run a callback that stops the event loop, since the Task-2 `__step(`) is scheduled before this stop callback, the event loop runs Task-2 `__step()` first.
-  - Task-2 run and hit asyncio.sleep, which is a future, hence it releases control back to the event loop to run the ready callback, which is the stop callback. Now the program ends before Task-2 can continue to run
+  - When Task-1 is done, it will schedule to run a callback that stops the event loop, since the Task-2 `__step()` is scheduled before this stop callback, the event loop runs Task-2 `__step()` first.
+  - Task-2 run and hit asyncio.sleep, which is a future, hence it releases control back to the event loop to run the ready callback, which is the stop callback. Now the program ends before Task-2 can continue to run.
 
 ### 2.5. Demonstrate 2
 
@@ -383,8 +383,8 @@ In this demonstrate we use asyncio.gather():
     - Coroutines or custom awaitable objects will be wrapped in a task (return `loop.create_task(coro_or_future)`)
     - Futures/Tasks will remain themself
   - In the happy case that no exception or cancellation happens:
-    - Each future done will call the callback to notify gather() that one future has been done
-    - The last future's on done callback will make the number of futures done == number of futures gather() wait for. Then it will aggregate all the results in order of the original future sequence passed in, and set that result to the return future (this also makes the future done).
+    - Each future done will call the callback to notify `gather()` that one future has been done
+    - The last future's on done callback will make the number of futures done == number of futures `gather()` wait for. Then it will aggregate all the results in order of the original future sequence passed in, and set that result to the return future (this also makes the future done).
 
 <details>
 <summary>Code (<a href="https://github.com/nguyenkhangme/understand-asyncio/blob/main/task_demonstration_2.py">source</a>):</summary>
@@ -632,6 +632,9 @@ if __name__ == "__main__":
 I found this simple hand drawing is intuitive, and will help to follow the visualization 2 easier :D
 
 ![demonstrate 2 simple visualization](/out/demo2/demo2_hand_drawing.png)
+
+You can go to [this link](https://nguyenkhang.me/posts/2025/12/understand-concurrency-in-python-with-asyncio-dig-into-the-asyncio-source-code/out/demo2/demo2.svg) to see the whole diagram below in good quality. Do not be scared, it’s long because it is explained in tiny detail, so it's easy to understand.
+
 ![demonstrate 2 detail visualization](/out/demo2/demo2.svg)
 
 #### 2.5.3. Demonstrate 2 explanation
@@ -639,8 +642,8 @@ I found this simple hand drawing is intuitive, and will help to follow the visua
 - In this demonstration, we can see:
   - How **task.__step() oschetrate and enable cooperative concurrent with coroutines**: each `__step()` runs a little bit, then it needs to wait for an I/O-like event (in this demo), so it yields control to the event loop to run another `__step()` or callback that is ready. So, callbacks are executed interleaved and have overlapping lifetimes.
   - Without awaiting it, a task will keep running in the background independently of the parent task (as long as the event loop is still running). To get the result of a task (or propagate its exception), we either `await` it or `await asyncio.gather()`, which uses `add_done_callback()`:
-    - For await task, the parent task will add_done_callback to wake_up the parent task when the child task is done.
-    - For await asynio.gather(), gather() will add_done_callback to all the child tasks. The parent task, again, add_done_callback on the gather future to wake itself up.
+    - With await task, the parent task will add_done_callback to wake_up the parent task when the child task is done.
+    - With await `asynio.gather()`, `gather()` will add_done_callback to all the child tasks. The parent task, again, add_done_callback on the gather future to wake itself up.
     - For Task-1, we add_done_callback to the task by ourselves, and do not await it, so Task-1 is done before its child.
   - **How event loop enable callback to be called** with `loop.call_soon()` inside task init, `loop.call_later()` in `asyncio.sleep()`, and especially with the method `add_done_callback()` of future.
 
@@ -675,7 +678,7 @@ Also, it's good to check on:
 - Queues and backpressure (asyncio.Queue)
 - Synchronization primitives: Lock, Event, Semaphore, Condition
 
-Also, you can check [PEP 3148 – futures - execute computations asynchronously](https://peps.python.org/pep-3148/) to learn about the `concurrent.futures` package, which introduces two core classes: Executor and Future (different from `asyncio.Future`). We can use it with `loop.run_in_executor(executor, func, *args)` to run a blocking function in an executor. The executor can be a `ThreadPoolExecutor` (uses a pool of threads) or a `ProcessPoolExecutor` (uses a pool of processes), and the call returns an awaitable that gives you the function’s result.
+Also, you can check [PEP 3148 – futures - execute computations asynchronously](https://peps.python.org/pep-3148/) to learn about the `concurrent.futures` package, which introduces two core classes: `Executor` and `Future` (different from `asyncio.Future`). We can use it with `loop.run_in_executor(executor, func, *args)` to run a blocking function in an executor. The executor can be a `ThreadPoolExecutor` (uses a pool of threads), or a `ProcessPoolExecutor` (uses a pool of processes), and the call returns an awaitable that gives you the function’s result.
 
 - The `ProcessPoolExecutor` helps with CPU-bound work by running code in parallel across multiple CPU cores.
 - The `ThreadPoolExecutor` helps with blocking I/O code: Not every library is asyncio-native, so you can't await it even if it does I/O. In that case, we can offload the work to another thread and await the result. We can easily do this by calling `asyncio.to_thread()`.
@@ -786,122 +789,161 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 
-"""
+```
+
 Output:
+
+```text
 === WITHOUT BLOCKING ===
 
 === sequential ===
-[04:25:32] start sequential vod1
-[04:25:32] scrooling reel: 0
+[18:34:13] start sequential vod1
+[18:34:13] scrooling reel: 0
 
 === sequential ===
-[04:25:32] start sequential vod1
+[18:34:13] start sequential vod1
 
 === concurrent ===
-[04:25:32] start concurrent vod1
-[04:25:32] start concurrent vod2
-[04:25:33] scrooling reel: 1
-[04:25:34] scrooling reel: 2
-[04:25:35] end   sequential vod1
-[04:25:35] start sequential vod2
-[04:25:35] end   sequential vod1
-[04:25:35] start sequential vod2
-[04:25:35] end   concurrent vod1
-[04:25:35] end   concurrent vod2
+[18:34:13] start concurrent vod1
+[18:34:13] start concurrent vod2
+[18:34:14] scrooling reel: 1
+[18:34:15] scrooling reel: 2
+[18:34:16] end   sequential vod1
+[18:34:16] start sequential vod2
+[18:34:16] end   sequential vod1
+[18:34:16] start sequential vod2
+[18:34:16] end   concurrent vod1
+[18:34:16] end   concurrent vod2
 concurrent took 3.00 seconds
-[04:25:35] scrooling reel: 3
-[04:25:36] scrooling reel: 4
-[04:25:37] scrooling reel: 5
-[04:25:38] end   sequential vod2
+[18:34:16] scrooling reel: 3
+[18:34:17] scrooling reel: 4
+[18:34:18] scrooling reel: 5
+[18:34:19] end   sequential vod2
 sequential took 6.00 seconds
-[04:25:38] end   sequential vod2
+[18:34:19] end   sequential vod2
 sequential took 6.00 seconds
-[04:25:38] scrooling reel: 6
-[04:25:39] scrooling reel: 7
-[04:25:41] scrooling reel: 8
-[04:25:42] scrooling reel: 9
+[18:34:19] scrooling reel: 6
+[18:34:20] scrooling reel: 7
+[18:34:21] scrooling reel: 8
+[18:34:22] scrooling reel: 9
 
 === WITH BLOCKING ===
 
 === sequential ===
-[04:25:43] start sequential vod1
-[04:25:43] scrooling reel: 0
-[04:25:43] === before blocking_download ===
-[04:25:43] vod1: start BLOCKING download
-[04:25:48] vod1: end BLOCKING download
-[04:25:48] === after blocking_download ===
+[18:34:23] start sequential vod1
+[18:34:23] scrooling reel: 0
+[18:34:23] === before blocking_download ===
+[18:34:23] vod1: start BLOCKING download
+[18:34:28] vod1: end BLOCKING download
+[18:34:28] === after blocking_download ===
 
 === sequential ===
-[04:25:48] start sequential vod1
+[18:34:28] start sequential vod1
 
 === concurrent ===
-[04:25:48] start concurrent vod1
-[04:25:48] start concurrent vod2
-[04:25:48] scrooling reel: 1
-[04:25:48] end   sequential vod1
-[04:25:48] start sequential vod2
-[04:25:49] scrooling reel: 2
-[04:25:50] scrooling reel: 3
-[04:25:51] end   sequential vod1
-[04:25:51] start sequential vod2
-[04:25:51] end   concurrent vod1
-[04:25:51] end   concurrent vod2
-[04:25:51] end   sequential vod2
+[18:34:28] start concurrent vod1
+[18:34:28] start concurrent vod2
+[18:34:28] scrooling reel: 1
+[18:34:28] end   sequential vod1
+[18:34:28] start sequential vod2
+[18:34:29] scrooling reel: 2
+[18:34:30] scrooling reel: 3
+[18:34:31] end   sequential vod1
+[18:34:31] start sequential vod2
+[18:34:31] end   concurrent vod1
+[18:34:31] end   concurrent vod2
+concurrent took 3.00 seconds
+[18:34:31] end   sequential vod2
 sequential took 8.00 seconds
-concurrent took 3.00 seconds
-[04:25:51] scrooling reel: 4
-[04:25:52] scrooling reel: 5
-[04:25:53] scrooling reel: 6
-[04:25:54] end   sequential vod2
+[18:34:31] scrooling reel: 4
+[18:34:32] scrooling reel: 5
+[18:34:33] scrooling reel: 6
+[18:34:34] end   sequential vod2
 sequential took 6.00 seconds
-[04:25:54] scrooling reel: 7
-[04:25:55] scrooling reel: 8
-[04:25:56] scrooling reel: 9
+[18:34:34] scrooling reel: 7
+[18:34:35] scrooling reel: 8
+[18:34:36] scrooling reel: 9
 
 === WITH BLOCKING ===
 
 === sequential ===
-[04:25:57] start sequential vod1
-[04:25:57] scrooling reel: 0
+[18:34:37] start sequential vod1
+[18:34:37] scrooling reel: 0
 
 === sequential ===
-[04:25:57] start sequential vod1
+[18:34:37] start sequential vod1
 
 === concurrent ===
-[04:25:57] === before blocking_download ===
-[04:25:57] vod1: start BLOCKING download
-[04:26:02] vod1: end BLOCKING download
-[04:26:02] === after blocking_download ===
-[04:26:02] start concurrent vod1
-[04:26:02] start concurrent vod2
-[04:26:02] scrooling reel: 1
-[04:26:02] end   sequential vod1
-[04:26:02] start sequential vod2
-[04:26:02] end   sequential vod1
-[04:26:02] start sequential vod2
-[04:26:03] scrooling reel: 2
-[04:26:04] scrooling reel: 3
-[04:26:05] end   concurrent vod1
-[04:26:05] end   concurrent vod2
-[04:26:05] end   sequential vod2
+[18:34:37] === before blocking_download ===
+[18:34:37] vod1: start BLOCKING download
+[18:34:42] vod1: end BLOCKING download
+[18:34:42] === after blocking_download ===
+[18:34:42] start concurrent vod1
+[18:34:42] start concurrent vod2
+[18:34:42] scrooling reel: 1
+[18:34:42] end   sequential vod1
+[18:34:42] start sequential vod2
+[18:34:42] end   sequential vod1
+[18:34:42] start sequential vod2
+[18:34:43] scrooling reel: 2
+[18:34:44] scrooling reel: 3
+[18:34:45] end   concurrent vod1
+[18:34:45] end   concurrent vod2
+[18:34:45] end   sequential vod2
 sequential took 8.01 seconds
-[04:26:05] end   sequential vod2
+[18:34:45] end   sequential vod2
 sequential took 8.01 seconds
 concurrent took 8.01 seconds
-[04:26:05] scrooling reel: 4
-[04:26:06] scrooling reel: 5
-[04:26:07] scrooling reel: 6
-[04:26:08] scrooling reel: 7
-[04:26:09] scrooling reel: 8
-[04:26:10] scrooling reel: 9
-"""
+[18:34:45] scrooling reel: 4
+[18:34:46] scrooling reel: 5
+[18:34:47] scrooling reel: 6
+[18:34:48] scrooling reel: 7
+[18:34:49] scrooling reel: 8
+[18:34:50] scrooling reel: 9
+
+=== HANDLE BLOCKING ===
+
+=== sequential ===
+[18:34:51] start sequential vod1
+[18:34:51] scrooling reel: 0
+
+=== sequential ===
+[18:34:51] start sequential vod1
+
+=== concurrent ===
+[18:34:51] === before blocking_download ===
+[18:34:51] vod1: start BLOCKING download
+[18:34:51] start concurrent vod1
+[18:34:51] start concurrent vod2
+[18:34:52] scrooling reel: 1
+[18:34:53] scrooling reel: 2
+[18:34:54] end   sequential vod1
+[18:34:54] start sequential vod2
+[18:34:54] end   sequential vod1
+[18:34:54] start sequential vod2
+[18:34:54] scrooling reel: 3
+[18:34:54] end   concurrent vod1
+[18:34:54] end   concurrent vod2
+concurrent took 3.01 seconds
+[18:34:55] scrooling reel: 4
+[18:34:56] scrooling reel: 5
+[18:34:56] vod1: end BLOCKING download
+[18:34:56] === after blocking_download ===
+[18:34:57] end   sequential vod2
+sequential took 6.00 seconds
+[18:34:57] end   sequential vod2
+sequential took 6.00 seconds
+[18:34:57] scrooling reel: 6
+[18:34:58] scrooling reel: 7
+[18:34:59] scrooling reel: 8
+[18:35:00] scrooling reel: 9
 ```
 
 </details>
 
 Also, you can check the resources listed below.
 
-## 5. Resources
+## 4. Resources
 
 [Python documentation](https://docs.python.org/3/library/asyncio.html)
 
