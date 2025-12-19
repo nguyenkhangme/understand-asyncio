@@ -276,7 +276,7 @@ Let's demonstrate the knowledge we just learnt with some coding and visualizatio
 The first demonstration is somewhat unrealistic when we define two async functions `coro1()` and `coro2()` does nothing related to I/O work, or that function does not await on any futures. But it helps us see how await on a coroutine works as described above, also we have a coroutine function `tick()` wrapped as a task and show some weird behavior (it's weird if we didn't know how it works).
 
 <details>
-<summary>Code (<a href="https://github.com/nguyenkhangme/understand-asyncio/task_demonstration_1.py">source</a>):</summary>
+<summary>Code (<a href="https://github.com/nguyenkhangme/understand-asyncio/blob/main/task_demonstration_1.py">source</a>):</summary>
 
 ```python
 import asyncio
@@ -388,7 +388,7 @@ In this demonstrate we use asyncio.gather():
     - The last future's on done callback will make the number of futures done == number of futures gather() wait for. Then it will aggregate all the results in order of the original future sequence passed in, and set that result to the return future (this also makes the future done).
 
 <details>
-<summary>Code (<a href="https://github.com/nguyenkhangme/understand-asyncio/task_demonstration_2.py">source</a>):</summary>
+<summary>Code (<a href="https://github.com/nguyenkhangme/understand-asyncio/blob/main/task_demonstration_2.py">source</a>):</summary>
 
 ```python
 import asyncio
