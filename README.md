@@ -684,7 +684,7 @@ Also, you can check [PEP 3148 – futures - execute computations asynchronously]
 You can also check my simple Python example for a minimal demonstration of how to use asyncio [here](https://github.com/nguyenkhangme/understand-asyncio/blob/main/a_simple_example.py) (I didn’t include it in this post).
 
 <details>
-<summary><a href="https://github.com/nguyenkhangme/understand-asyncio/blob/main/a_simple_example.py">a_simple_example.py</a>:</summary>
+<summary>a_simple_example.py(<a href="https://github.com/nguyenkhangme/understand-asyncio/blob/main/a_simple_example.py">source</a>):</summary>
 
 ```python
 import asyncio
